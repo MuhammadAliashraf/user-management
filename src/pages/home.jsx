@@ -60,7 +60,7 @@ export default function Home() {
     setLoading(true);
     const storage = getStorage();
     const imageFile = formData.image;
-
+    console.log('log', formData);
     if (!imageFile) {
       toast({
         variant: 'destructive',
@@ -118,7 +118,7 @@ export default function Home() {
       lastName: user.lastName,
       email: user.email,
       phone: user.phone,
-      image: null,
+      image: user.image,
     });
     setEditUserId(user.id);
   };
@@ -138,6 +138,8 @@ export default function Home() {
     { key: 'phone', label: 'Phone Number' },
     { key: 'image', label: 'Image' },
   ];
+
+  //TODO:Validations and Edit Fun for image
 
   return (
     <div className="p-6 bg-gray-50 mx-auto">
