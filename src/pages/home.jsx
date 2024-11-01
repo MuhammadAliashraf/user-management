@@ -23,6 +23,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [fetchtingData, setfetchtingData] = useState(false);
   const [editUserId, setEditUserId] = useState(null);
+  const [imagePreview, setImagePreview] = useState();
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -53,15 +54,69 @@ export default function Home() {
       ...prevData,
       [name]: files ? files[0] : value,
     }));
+
+    if (name === 'image') {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(files[0]);
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    if (!formData.firstName) {
+      toast({
+        variant: 'destructive',
+        description: 'First name is required.',
+      });
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.lastName) {
+      toast({
+        variant: 'destructive',
+        description: 'Last name is required.',
+      });
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.email) {
+      toast({
+        variant: 'destructive',
+        description: 'Email is required.',
+      });
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.phone) {
+      toast({
+        variant: 'destructive',
+        description: 'Phone number is required.',
+      });
+      setLoading(false);
+      return;
+    }
+
+    // Reference to Firebase storage
     const storage = getStorage();
-    const imageFile = formData.image;
-    console.log('log', formData);
-    if (!imageFile) {
+
+    // Check if image is a new file or an existing URL
+    const isNewImage = formData.image && typeof formData.image !== 'string';
+    let imageUrl = formData.image;
+
+    if (isNewImage) {
+      // If a new image file is selected, upload it
+      const storageRef = ref(storage, `images/${formData.image.name}`);
+      await uploadBytes(storageRef, formData.image);
+      imageUrl = await getDownloadURL(storageRef);
+    } else if (!imageUrl) {
+      // If no image is provided and no existing image URL, show error
       toast({
         variant: 'destructive',
         description: 'Please upload an image.',
@@ -70,10 +125,7 @@ export default function Home() {
       return;
     }
 
-    const storageRef = ref(storage, `images/${imageFile.name}`);
-    await uploadBytes(storageRef, imageFile);
-    const imageUrl = await getDownloadURL(storageRef);
-
+    // Construct user object with updated data
     const newUser = {
       firstName: formData.firstName,
       lastName: formData.lastName,
@@ -82,34 +134,46 @@ export default function Home() {
       image: imageUrl,
     };
 
-    if (editUserId) {
-      const userDoc = doc(db, 'users', editUserId);
-      await updateDoc(userDoc, newUser);
-      setUsers(
-        users.map((user) =>
-          user.id === editUserId ? { id: editUserId, ...newUser } : user
-        )
-      );
-      setEditUserId(null);
+    try {
+      if (editUserId) {
+        // Update existing user
+        const userDoc = doc(db, 'users', editUserId);
+        await updateDoc(userDoc, newUser);
+        setUsers(
+          users.map((user) =>
+            user.id === editUserId ? { id: editUserId, ...newUser } : user
+          )
+        );
+        setEditUserId(null);
+        toast({
+          description: 'User updated successfully.',
+        });
+      } else {
+        // Add new user
+        const docRef = await addDoc(collection(db, 'users'), newUser);
+        setUsers([...users, { id: docRef.id, ...newUser }]);
+        toast({
+          description: 'User added successfully.',
+        });
+      }
+    } catch (error) {
+      console.error('Error updating or adding user: ', error);
       toast({
-        description: 'User updated successfully.',
+        variant: 'destructive',
+        description: 'An error occurred. Please try again.',
       });
+    } finally {
       setLoading(false);
-    } else {
-      const docRef = await addDoc(collection(db, 'users'), newUser);
-      setUsers([...users, { id: docRef.id, ...newUser }]);
-      toast({
-        description: 'User added successfully.',
+      setFormData({
+        firstName: '',
+        lastName: '',
+        email: '',
+        phone: '',
+        image: null,
       });
-      setLoading(false);
+      setImagePreview(null);
+      window.location.reload();
     }
-    setFormData({
-      firstName: '',
-      lastName: '',
-      email: '',
-      phone: '',
-      image: null,
-    });
   };
 
   const editUser = (user) => {
@@ -120,6 +184,7 @@ export default function Home() {
       phone: user.phone,
       image: user.image,
     });
+    setImagePreview(user.image);
     setEditUserId(user.id);
   };
 
@@ -142,21 +207,84 @@ export default function Home() {
   //TODO:Validations and Edit Fun for image
 
   return (
-    <div className="p-6 bg-gray-50 mx-auto">
-      <h1 className="text-2xl font-bold mb-4">User Management</h1>
+    // <div className="p-6 bg-gray-50 mx-auto">
+    //   <h1 className="text-2xl font-bold mb-4">User Management</h1>
+    //   {imagePreview && <img src={imagePreview} className="w-32 h-32 m-2" />}
+    //   <form onSubmit={handleSubmit} className="mb-6">
+    //     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    //       <Input
+    //         name="firstName"
+    //         placeholder="First Name"
+    //         value={formData.firstName}
+    //         onChange={handleChange}
+    //       />
+    //       <Input
+    //         name="lastName"
+    //         placeholder="Last Name"
+    //         value={formData.lastName}
+    //         onChange={handleChange}
+    //       />
+    //       <Input
+    //         name="email"
+    //         type="email"
+    //         placeholder="Email"
+    //         value={formData.email}
+    //         onChange={handleChange}
+    //       />
+    //       <Input
+    //         name="phone"
+    //         type="tel"
+    //         placeholder="Phone"
+    //         value={formData.phone}
+    //         onChange={handleChange}
+    //       />
+    //       <Input name="image" type="file" onChange={handleChange} />
+    //       <Button disabled={loading} type="submit">
+    //         {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+    //         {loading ? 'Please wait' : editUserId ? 'Update User' : 'Add User'}
+    //       </Button>
+    //     </div>
+    //   </form>
+    //   <Button onClick={fetchUsers} className="mb-4">
+    //     Refresh
+    //   </Button>
+    //   {fetchtingData ? (
+    //     <div className="flex items-center justify-center h-[100vh]">
+    //       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+    //     </div>
+    //   ) : (
+    //     <DynamicTabel
+    //       data={users}
+    //       caption="users"
+    //       fieldsToRender={productTabelFields}
+    //       handleDelete={(item) => deleteUser(item)}
+    //       handleEdit={(item) => editUser(item)}
+    //     />
+    //   )}
+    // </div>
+    <div className="p-6 bg-gray-50 mx-auto max-w-screen-lg">
+      <h1 className="text-2xl font-bold mb-4 text-center md:text-left">
+        User Management
+      </h1>
+      {imagePreview && (
+        <img src={imagePreview} className="w-32 h-32 m-2 mx-auto md:mx-0" />
+      )}
+
       <form onSubmit={handleSubmit} className="mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <Input
             name="firstName"
             placeholder="First Name"
             value={formData.firstName}
             onChange={handleChange}
+            className="w-full"
           />
           <Input
             name="lastName"
             placeholder="Last Name"
             value={formData.lastName}
             onChange={handleChange}
+            className="w-full"
           />
           <Input
             name="email"
@@ -164,6 +292,7 @@ export default function Home() {
             placeholder="Email"
             value={formData.email}
             onChange={handleChange}
+            className="w-full"
           />
           <Input
             name="phone"
@@ -171,19 +300,33 @@ export default function Home() {
             placeholder="Phone"
             value={formData.phone}
             onChange={handleChange}
+            className="w-full"
           />
-          <Input name="image" type="file" onChange={handleChange} />
-          <Button disabled={loading} type="submit">
+          <Input
+            name="image"
+            type="file"
+            onChange={handleChange}
+            className="w-full"
+          />
+          <Button
+            disabled={loading}
+            type="submit"
+            className="col-span-1 sm:col-span-2 lg:col-span-1 w-full"
+          >
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {loading ? 'Please wait' : editUserId ? 'Update User' : 'Add User'}
           </Button>
         </div>
       </form>
-      <Button onClick={fetchUsers} className="mb-4">
+
+      <Button onClick={fetchUsers} className="mb-4 w-full sm:w-auto">
         Refresh
       </Button>
+
       {fetchtingData ? (
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        <div className="flex items-center justify-center h-[100vh]">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        </div>
       ) : (
         <DynamicTabel
           data={users}
@@ -191,6 +334,7 @@ export default function Home() {
           fieldsToRender={productTabelFields}
           handleDelete={(item) => deleteUser(item)}
           handleEdit={(item) => editUser(item)}
+          className="w-full overflow-x-auto"
         />
       )}
     </div>
